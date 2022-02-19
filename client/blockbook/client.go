@@ -568,7 +568,7 @@ func connectSocket(u *url.URL, proxyDialer proxy.Dialer) (model.SocketClient, er
 
 	// Wait for socket to be ready or timeout
 	select {
-	case <-time.After(10 * time.Second):
+	case <-time.After(100 * time.Second):
 		return nil, fmt.Errorf("websocket connection timeout (%s)", u.Host)
 	case <-socketReady:
 		break

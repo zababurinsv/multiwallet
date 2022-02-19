@@ -2,10 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
-	"sync"
-
 	"github.com/OpenBazaar/multiwallet"
 	"github.com/OpenBazaar/multiwallet/api"
 	"github.com/OpenBazaar/multiwallet/cli"
@@ -13,6 +9,9 @@ import (
 	wi "github.com/OpenBazaar/wallet-interface"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/jessevdk/go-flags"
+	"os"
+	"os/signal"
+	"sync"
 )
 
 const WALLET_VERSION = "0.1.0"
@@ -58,19 +57,20 @@ func (x *Version) Execute(args []string) error {
 
 func (x *Start) Execute(args []string) error {
 	m := make(map[wi.CoinType]bool)
-	m[wi.Bitcoin] = true
-	m[wi.BitcoinCash] = true
+	m[wi.Bitcoin] = false
+	m[wi.BitcoinCash] = false
 	m[wi.Zcash] = true
-	m[wi.Litecoin] = true
-	m[wi.Ethereum] = true
+	m[wi.Litecoin] = false
+	m[wi.Ethereum] = false
 	params := &chaincfg.MainNetParams
 	if x.Testnet {
 		params = &chaincfg.TestNet3Params
 	}
 	cfg := config.NewDefaultConfig(m, params)
-	cfg.Mnemonic = "bottle author ability expose illegal saddle antique setup pledge wife innocent treat"
+	cfg.Mnemonic = "spray like obey hamster sorry address dynamic receive asthma apart story mouse"
 	var err error
 	mw, err = multiwallet.NewMultiWallet(cfg)
+
 	if err != nil {
 		return err
 	}

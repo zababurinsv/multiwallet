@@ -155,7 +155,7 @@ func (w *LitecoinWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKe
 		0,
 		0,
 		isPrivateKey)
-	return hdKey.Child(0)
+	return hdKey.DeriveNonStandard(0)
 }
 
 func (w *LitecoinWallet) CurrentAddress(purpose wi.KeyPurpose) btcutil.Address {

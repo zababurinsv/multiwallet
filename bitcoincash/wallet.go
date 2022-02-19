@@ -109,8 +109,8 @@ func bitcoinCashAddress(key *hd.ExtendedKey, params *chaincfg.Params) (btcutil.A
 }
 
 func (w *BitcoinCashWallet) Start() {
-	w.client.Start()
-	w.ws.Start()
+	//w.client.Start()
+	//w.ws.Start()
 }
 
 func (w *BitcoinCashWallet) Params() *chaincfg.Params {
@@ -156,7 +156,7 @@ func (w *BitcoinCashWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivat
 		0,
 		0,
 		isPrivateKey)
-	return hdKey.Child(0)
+	return hdKey.DeriveNonStandard(0)
 }
 
 func (w *BitcoinCashWallet) CurrentAddress(purpose wi.KeyPurpose) btcutil.Address {

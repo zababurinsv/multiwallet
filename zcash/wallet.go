@@ -54,7 +54,6 @@ var (
 
 func NewZCashWallet(cfg config.CoinConfig, mnemonic string, params *chaincfg.Params, proxy proxy.Dialer, cache cache.Cacher, disableExchangeRates bool) (*ZCashWallet, error) {
 	seed := bip39.NewSeed(mnemonic, "")
-
 	mPrivKey, err := hd.NewMaster(seed, params)
 	if err != nil {
 		return nil, err
@@ -155,7 +154,7 @@ func (w *ZCashWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKey b
 		0,
 		0,
 		isPrivateKey)
-	return hdKey.Child(0)
+	return hdKey.DeriveNonStandard(0)
 }
 
 func (w *ZCashWallet) CurrentAddress(purpose wi.KeyPurpose) btcutil.Address {
@@ -210,6 +209,7 @@ func (w *ZCashWallet) HasKey(addr btcutil.Address) bool {
 }
 
 func (w *ZCashWallet) Balance() (wi.CurrencyValue, wi.CurrencyValue) {
+	fmt.Println("(w *ZCashWallet) Balance()")
 	utxos, _ := w.db.Utxos().GetAll()
 	txns, _ := w.db.Txns().GetAll(false)
 

@@ -5,11 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"math/big"
-	"strconv"
-	"time"
-
 	"github.com/OpenBazaar/multiwallet/cache"
 	"github.com/OpenBazaar/multiwallet/client"
 	"github.com/OpenBazaar/multiwallet/config"
@@ -30,6 +25,10 @@ import (
 	"github.com/op/go-logging"
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/net/proxy"
+	"io"
+	"math/big"
+	"strconv"
+	"time"
 )
 
 type BitcoinWallet struct {
@@ -57,7 +56,6 @@ var (
 
 func NewBitcoinWallet(cfg config.CoinConfig, mnemonic string, params *chaincfg.Params, proxy proxy.Dialer, cache cache.Cacher, disableExchangeRates bool) (*BitcoinWallet, error) {
 	seed := bip39.NewSeed(mnemonic, "")
-
 	mPrivKey, err := hd.NewMaster(seed, params)
 	if err != nil {
 		return nil, err
@@ -70,7 +68,7 @@ func NewBitcoinWallet(cfg config.CoinConfig, mnemonic string, params *chaincfg.P
 	if err != nil {
 		return nil, err
 	}
-
+	//
 	c, err := client.NewClientPool(cfg.ClientAPIs, proxy)
 	if err != nil {
 		return nil, err
@@ -79,14 +77,14 @@ func NewBitcoinWallet(cfg config.CoinConfig, mnemonic string, params *chaincfg.P
 	if !disableExchangeRates {
 		go er.Run()
 	}
-
+	//
 	wm, err := service.NewWalletService(cfg.DB, km, c, params, wi.Bitcoin, cache)
 	if err != nil {
 		return nil, err
 	}
-
-	fp := spvwallet.NewFeeProvider(cfg.MaxFee, cfg.HighFee, cfg.MediumFee, cfg.LowFee,  cfg.SuperLowFee,, cfg.FeeAPI, proxy)
-
+	//
+	//fp := spvwallet.NewFeeProvider(cfg.MaxFee, cfg.HighFee, cfg.MediumFee, cfg.LowFee,  cfg.SuperLowFee,, cfg.FeeAPI, proxy)
+	fp := spvwallet.NewFeeProvider(cfg.MaxFee, cfg.HighFee, cfg.MediumFee, cfg.LowFee, cfg.FeeAPI, proxy)
 	return &BitcoinWallet{
 		db:            cfg.DB,
 		km:            km,
@@ -96,7 +94,7 @@ func NewBitcoinWallet(cfg config.CoinConfig, mnemonic string, params *chaincfg.P
 		fp:            fp,
 		mPrivKey:      mPrivKey,
 		mPubKey:       mPubKey,
-		exchangeRates: er,
+		exchangeRates: nil,
 		log:           logging.MustGetLogger("bitcoin-wallet"),
 	}, nil
 }
@@ -110,8 +108,105 @@ func (w *BitcoinWallet) Start() {
 	w.ws.Start()
 }
 
-func (w *BitcoinWallet) Params() *chaincfg.Params {
-	return w.params
+func (w *BitcoinWallet) ScriptToAddress(script []byte) (btc.Address, error) {
+	_, addrs, _, err := txscript.ExtractPkScriptAddrs(script, w.params)
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, errors.New("unknown script")
+	}
+	return addrs[0], nil
+}
+
+func (w *BitcoinWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
+	return *big.NewInt(int64(feeLevel))
+}
+
+func (w *BitcoinWallet) CurrentAddress(purpose wi.KeyPurpose) btc.Address {
+	key, err := w.km.GetCurrentKey(purpose)
+	if err != nil {
+		w.log.Errorf("Error generating current key: %s", err)
+	}
+	addr, err := w.km.KeyToAddress(key)
+	if err != nil {
+		w.log.Errorf("Error converting key to address: %s", err)
+	}
+	return addr
+}
+
+
+// Build a client.Transaction so we can ingest it into the wallet service then broadcast
+func (w *BitcoinWallet) Broadcast(tx *wire.MsgTx) error {
+	var buf bytes.Buffer
+	tx.BtcEncode(&buf, wire.ProtocolVersion, wire.WitnessEncoding)
+	cTxn := model.Transaction{
+		Txid:          tx.TxHash().String(),
+		Locktime:      int(tx.LockTime),
+		Version:       int(tx.Version),
+		Confirmations: 0,
+		Time:          time.Now().Unix(),
+		RawBytes:      buf.Bytes(),
+	}
+	utxos, err := w.db.Utxos().GetAll()
+	if err != nil {
+		return err
+	}
+	for n, in := range tx.TxIn {
+		var u wi.Utxo
+		for _, ut := range utxos {
+			if util.OutPointsEqual(ut.Op, in.PreviousOutPoint) {
+				u = ut
+				break
+			}
+		}
+		addr, err := w.ScriptToAddress(u.ScriptPubkey)
+		if err != nil {
+			return err
+		}
+		val, _ := strconv.ParseInt(u.Value, 10, 64)
+		input := model.Input{
+			Txid: in.PreviousOutPoint.Hash.String(),
+			Vout: int(in.PreviousOutPoint.Index),
+			ScriptSig: model.Script{
+				Hex: hex.EncodeToString(in.SignatureScript),
+			},
+			Sequence: uint32(in.Sequence),
+			N:        n,
+			Addr:     addr.String(),
+			Satoshis: val,
+			Value:    float64(val) / util.SatoshisPerCoin(wi.Bitcoin),
+		}
+		cTxn.Inputs = append(cTxn.Inputs, input)
+	}
+	for n, out := range tx.TxOut {
+		addr, err := w.ScriptToAddress(out.PkScript)
+		if err != nil {
+			return err
+		}
+		output := model.Output{
+			N: n,
+			ScriptPubKey: model.OutScript{
+				Script: model.Script{
+					Hex: hex.EncodeToString(out.PkScript),
+				},
+				Addresses: []string{addr.String()},
+			},
+			Value: float64(float64(out.Value) / util.SatoshisPerCoin(wi.Bitcoin)),
+		}
+		cTxn.Outputs = append(cTxn.Outputs, output)
+	}
+	_, err = w.client.Broadcast(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	w.ws.ProcessIncomingTransaction(cTxn)
+	return nil
+}
+
+func (w *BitcoinWallet) Close() {
+	w.ws.Stop()
+	w.client.Close()
 }
 
 func (w *BitcoinWallet) CurrencyCode() string {
@@ -120,6 +215,10 @@ func (w *BitcoinWallet) CurrencyCode() string {
 	} else {
 		return "tbtc"
 	}
+}
+
+func (w *BitcoinWallet) Params() *chaincfg.Params {
+	return w.params
 }
 
 func (w *BitcoinWallet) IsDust(amount big.Int) bool {
@@ -153,20 +252,10 @@ func (w *BitcoinWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKey
 		0,
 		0,
 		isPrivateKey)
-	return hdKey.Child(0)
+	return hdKey.DeriveNonStandard(0)
 }
 
-func (w *BitcoinWallet) CurrentAddress(purpose wi.KeyPurpose) btc.Address {
-	key, err := w.km.GetCurrentKey(purpose)
-	if err != nil {
-		w.log.Errorf("Error generating current key: %s", err)
-	}
-	addr, err := w.km.KeyToAddress(key)
-	if err != nil {
-		w.log.Errorf("Error converting key to address: %s", err)
-	}
-	return addr
-}
+
 
 func (w *BitcoinWallet) NewAddress(purpose wi.KeyPurpose) btc.Address {
 	key, err := w.km.GetNextUnused(purpose)
@@ -185,17 +274,6 @@ func (w *BitcoinWallet) NewAddress(purpose wi.KeyPurpose) btc.Address {
 
 func (w *BitcoinWallet) DecodeAddress(addr string) (btc.Address, error) {
 	return btc.DecodeAddress(addr, w.params)
-}
-
-func (w *BitcoinWallet) ScriptToAddress(script []byte) (btc.Address, error) {
-	_, addrs, _, err := txscript.ExtractPkScriptAddrs(script, w.params)
-	if err != nil {
-		return nil, err
-	}
-	if len(addrs) == 0 {
-		return nil, errors.New("unknown script")
-	}
-	return addrs[0], nil
 }
 
 func (w *BitcoinWallet) AddressToScript(addr btc.Address) ([]byte, error) {
@@ -287,10 +365,6 @@ func (w *BitcoinWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error) {
 
 func (w *BitcoinWallet) ChainTip() (uint32, chainhash.Hash) {
 	return w.ws.ChainTip()
-}
-
-func (w *BitcoinWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
-	return *big.NewInt(int64(w.fp.GetFeePerByte(feeLevel)))
 }
 
 func (w *BitcoinWallet) Spend(amount big.Int, addr btc.Address, feeLevel wi.FeeLevel, referenceID string, spendAll bool) (*chainhash.Hash, error) {
@@ -396,11 +470,6 @@ func (w *BitcoinWallet) GetConfirmations(txid chainhash.Hash) (uint32, uint32, e
 	return chainTip - uint32(txn.Height) + 1, uint32(txn.Height), nil
 }
 
-func (w *BitcoinWallet) Close() {
-	w.ws.Stop()
-	w.client.Close()
-}
-
 func (w *BitcoinWallet) ExchangeRates() wi.ExchangeRates {
 	return w.exchangeRates
 }
@@ -416,74 +485,6 @@ func (w *BitcoinWallet) DumpTables(wr io.Writer) {
 	for _, u := range utxos {
 		fmt.Fprintf(wr, "Hash: %s, Index: %d, Height: %d, Value: %s, WatchOnly: %t\n", u.Op.Hash.String(), int(u.Op.Index), int(u.AtHeight), u.Value, u.WatchOnly)
 	}
-}
-
-// Build a client.Transaction so we can ingest it into the wallet service then broadcast
-func (w *BitcoinWallet) Broadcast(tx *wire.MsgTx) error {
-	var buf bytes.Buffer
-	tx.BtcEncode(&buf, wire.ProtocolVersion, wire.WitnessEncoding)
-	cTxn := model.Transaction{
-		Txid:          tx.TxHash().String(),
-		Locktime:      int(tx.LockTime),
-		Version:       int(tx.Version),
-		Confirmations: 0,
-		Time:          time.Now().Unix(),
-		RawBytes:      buf.Bytes(),
-	}
-	utxos, err := w.db.Utxos().GetAll()
-	if err != nil {
-		return err
-	}
-	for n, in := range tx.TxIn {
-		var u wi.Utxo
-		for _, ut := range utxos {
-			if util.OutPointsEqual(ut.Op, in.PreviousOutPoint) {
-				u = ut
-				break
-			}
-		}
-		addr, err := w.ScriptToAddress(u.ScriptPubkey)
-		if err != nil {
-			return err
-		}
-		val, _ := strconv.ParseInt(u.Value, 10, 64)
-		input := model.Input{
-			Txid: in.PreviousOutPoint.Hash.String(),
-			Vout: int(in.PreviousOutPoint.Index),
-			ScriptSig: model.Script{
-				Hex: hex.EncodeToString(in.SignatureScript),
-			},
-			Sequence: uint32(in.Sequence),
-			N:        n,
-			Addr:     addr.String(),
-			Satoshis: val,
-			Value:    float64(val) / util.SatoshisPerCoin(wi.Bitcoin),
-		}
-		cTxn.Inputs = append(cTxn.Inputs, input)
-	}
-	for n, out := range tx.TxOut {
-		addr, err := w.ScriptToAddress(out.PkScript)
-		if err != nil {
-			return err
-		}
-		output := model.Output{
-			N: n,
-			ScriptPubKey: model.OutScript{
-				Script: model.Script{
-					Hex: hex.EncodeToString(out.PkScript),
-				},
-				Addresses: []string{addr.String()},
-			},
-			Value: float64(float64(out.Value) / util.SatoshisPerCoin(wi.Bitcoin)),
-		}
-		cTxn.Outputs = append(cTxn.Outputs, output)
-	}
-	_, err = w.client.Broadcast(buf.Bytes())
-	if err != nil {
-		return err
-	}
-	w.ws.ProcessIncomingTransaction(cTxn)
-	return nil
 }
 
 // AssociateTransactionWithOrder used for ORDER_PAYMENT message

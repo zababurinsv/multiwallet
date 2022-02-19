@@ -45,27 +45,27 @@ func NewKeyManager(db wallet.Keys, params *chaincfg.Params, masterPrivKey *hd.Ex
 // m / purpose' / coin_type' / account' / change / address_index
 func Bip44Derivation(masterPrivKey *hd.ExtendedKey, coinType wallet.CoinType) (internal, external *hd.ExtendedKey, err error) {
 	// Purpose = bip44
-	fourtyFour, err := masterPrivKey.Child(hd.HardenedKeyStart + 44)
+	fourtyFour, err := masterPrivKey.DeriveNonStandard(hd.HardenedKeyStart + 44)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Cointype
-	bitcoin, err := fourtyFour.Child(hd.HardenedKeyStart + uint32(coinType))
+	bitcoin, err := fourtyFour.DeriveNonStandard(hd.HardenedKeyStart + uint32(coinType))
 	if err != nil {
 		return nil, nil, err
 	}
 	// Account = 0
-	account, err := bitcoin.Child(hd.HardenedKeyStart + 0)
+	account, err := bitcoin.DeriveNonStandard(hd.HardenedKeyStart + 0)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Change(0) = external
-	external, err = account.Child(0)
+	external, err = account.DeriveNonStandard(0)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Change(1) = internal
-	internal, err = account.Child(1)
+	internal, err = account.DeriveNonStandard(1)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -174,9 +174,9 @@ func (km *KeyManager) MarkKeyAsUsed(scriptAddress []byte) error {
 
 func (km *KeyManager) GenerateChildKey(purpose wallet.KeyPurpose, index uint32) (*hd.ExtendedKey, error) {
 	if purpose == wallet.EXTERNAL {
-		return km.externalKey.Child(index)
+		return km.externalKey.DeriveNonStandard(index)
 	} else if purpose == wallet.INTERNAL {
-		return km.internalKey.Child(index)
+		return km.internalKey.DeriveNonStandard(index)
 	}
 	return nil, errors.New("unknown key purpose")
 }

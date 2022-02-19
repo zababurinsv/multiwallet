@@ -2,10 +2,6 @@ package multiwallet
 
 import (
 	"errors"
-	"strings"
-	"time"
-
-	eth "github.com/OpenBazaar/go-ethwallet/wallet"
 	"github.com/OpenBazaar/multiwallet/bitcoin"
 	"github.com/OpenBazaar/multiwallet/bitcoincash"
 	"github.com/OpenBazaar/multiwallet/client/blockbook"
@@ -17,6 +13,8 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/op/go-logging"
 	"github.com/tyler-smith/go-bip39"
+	"strings"
+	"time"
 )
 
 var log = logging.MustGetLogger("multiwallet")
@@ -47,6 +45,7 @@ func NewMultiWallet(cfg *config.Config) (MultiWallet, error) {
 	var err error
 	for _, coin := range cfg.Coins {
 		var w wallet.Wallet
+		_, _ = err, w
 		switch coin.CoinType {
 		case wallet.Bitcoin:
 			w, err = bitcoin.NewBitcoinWallet(coin, cfg.Mnemonic, cfg.Params, cfg.Proxy, cfg.Cache, cfg.DisableExchangeRates)
@@ -88,16 +87,16 @@ func NewMultiWallet(cfg *config.Config) (MultiWallet, error) {
 			} else {
 				multiwallet[wallet.TestnetLitecoin] = w
 			}
-		case wallet.Ethereum:
-			w, err = eth.NewEthereumWallet(coin, cfg.Params, cfg.Mnemonic, cfg.Proxy)
-			if err != nil {
-				return nil, err
-			}
-			if cfg.Params.Name == chaincfg.MainNetParams.Name {
-				multiwallet[wallet.Ethereum] = w
-			} else {
-				multiwallet[wallet.TestnetEthereum] = w
-			}
+		//case wallet.Ethereum:
+		//	w, err = eth.NewEthereumWallet(coin, cfg.Params, cfg.Mnemonic, cfg.Proxy)
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//	if cfg.Params.Name == chaincfg.MainNetParams.Name {
+		//		multiwallet[wallet.Ethereum] = w
+		//	} else {
+		//		multiwallet[wallet.TestnetEthereum] = w
+		//	}
 		}
 	}
 	return multiwallet, nil

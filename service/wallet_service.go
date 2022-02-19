@@ -192,6 +192,7 @@ func (ws *WalletService) ProcessIncomingTransaction(tx model.Transaction) {
 
 // A new block was found let's update our chain height and best hash and check for a reorg
 func (ws *WalletService) processIncomingBlock(block model.Block) {
+	Log.Infof("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	Log.Infof("received new %s block at height %d: %s", ws.coinType.String(), block.Height, block.Hash)
 	ws.lock.RLock()
 	currentBest := ws.bestBlock
@@ -200,6 +201,7 @@ func (ws *WalletService) processIncomingBlock(block model.Block) {
 	ws.lock.Lock()
 	err := ws.saveHashAndHeight(block.Hash, uint32(block.Height))
 	if err != nil {
+		Log.Infof("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		Log.Errorf("update %s blockchain height: %s", ws.coinType.String(), err.Error())
 	}
 	ws.lock.Unlock()

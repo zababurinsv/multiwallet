@@ -89,7 +89,8 @@ func (w *BitcoinWallet) buildTx(amount int64, addr btc.Address, feeLevel wi.FeeL
 	out := wire.NewTxOut(amount, script)
 
 	// Create change source
-	changeSource := func() ([]byte, error) {
+	var changeSource = txauthor.ChangeSource{}
+	changeSource.NewScript = func() ([]byte, error) {
 		addr := w.CurrentAddress(wi.INTERNAL)
 		script, err := txscript.PayToAddrScript(addr)
 		if err != nil {
@@ -97,11 +98,19 @@ func (w *BitcoinWallet) buildTx(amount int64, addr btc.Address, feeLevel wi.FeeL
 		}
 		return script, nil
 	}
-
+	//changeSource.NewScript := func() ([]byte, error) {
+	//	addr := w.CurrentAddress(wi.INTERNAL)
+	//	script, err := txscript.PayToAddrScript(addr)
+	//	if err != nil {
+	//		return []byte{}, err
+	//	}
+	//	return script, nil
+	//}
 	outputs := []*wire.TxOut{out}
 	if optionalOutput != nil {
 		outputs = append(outputs, optionalOutput)
 	}
+	//txauthor.ChangeSource
 	authoredTx, err := newUnsignedTransaction(outputs, btc.Amount(feePerKB), inputSource, changeSource)
 	if err != nil {
 		return nil, err
@@ -232,7 +241,7 @@ func newUnsignedTransaction(outputs []*wire.TxOut, feePerKb btc.Amount, fetchInp
 		changeAmount := inputAmount - targetAmount - maxRequiredFee
 		if changeAmount != 0 && !txrules.IsDustAmount(changeAmount,
 			P2PKHOutputSize, txrules.DefaultRelayFeePerKb) {
-			changeScript, err := fetchChange()
+			changeScript, err := fetchChange.NewScript()
 			if err != nil {
 				return nil, err
 			}

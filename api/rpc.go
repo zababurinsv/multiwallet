@@ -2,10 +2,9 @@ package api
 
 import (
 	"errors"
-	"net"
-
+	"fmt"
 	"github.com/OpenBazaar/multiwallet"
-	"github.com/OpenBazaar/multiwallet/api/pb"
+	pb "github.com/OpenBazaar/multiwallet/api/pb"
 	"github.com/OpenBazaar/multiwallet/bitcoin"
 	"github.com/OpenBazaar/multiwallet/bitcoincash"
 	"github.com/OpenBazaar/multiwallet/litecoin"
@@ -15,6 +14,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"math/big"
+	"net"
 )
 
 const Addr = "127.0.0.1:8234"
@@ -24,8 +25,10 @@ type server struct {
 }
 
 func ServeAPI(w multiwallet.MultiWallet) error {
+	fmt.Println("server listen : ", Addr)
 	lis, err := net.Listen("tcp", Addr)
 	if err != nil {
+		fmt.Printf("%v\t*\n", err)
 		return err
 	}
 	s := grpc.NewServer()
@@ -38,6 +41,7 @@ func ServeAPI(w multiwallet.MultiWallet) error {
 }
 
 func coinType(coinType pb.CoinType) wallet.CoinType {
+	fmt.Println("coinType(coinType pb.CoinType)", coinType)
 	switch coinType {
 	case pb.CoinType_BITCOIN:
 		return wallet.Bitcoin
@@ -58,6 +62,7 @@ func (s *server) Stop(ctx context.Context, in *pb.Empty) (*pb.Empty, error) {
 }
 
 func (s *server) CurrentAddress(ctx context.Context, in *pb.KeySelection) (*pb.Address, error) {
+	fmt.Println("(s *server) CurrentAddress", in.Coin)
 	var purpose wallet.KeyPurpose
 	if in.Purpose == pb.KeyPurpose_INTERNAL {
 		purpose = wallet.INTERNAL
@@ -76,6 +81,7 @@ func (s *server) CurrentAddress(ctx context.Context, in *pb.KeySelection) (*pb.A
 }
 
 func (s *server) NewAddress(ctx context.Context, in *pb.KeySelection) (*pb.Address, error) {
+	fmt.Println("(s *server) NewAddress", in.Coin)
 	var purpose wallet.KeyPurpose
 	if in.Purpose == pb.KeyPurpose_INTERNAL {
 		purpose = wallet.INTERNAL
@@ -94,6 +100,7 @@ func (s *server) NewAddress(ctx context.Context, in *pb.KeySelection) (*pb.Addre
 }
 
 func (s *server) ChainTip(ctx context.Context, in *pb.CoinSelection) (*pb.Height, error) {
+	fmt.Println("(s *server) ChainTip", in.Coin)
 	ct := coinType(in.Coin)
 	wal, err := s.w.WalletForCurrencyCode(ct.CurrencyCode())
 	if err != nil {
@@ -104,53 +111,65 @@ func (s *server) ChainTip(ctx context.Context, in *pb.CoinSelection) (*pb.Height
 }
 
 func (s *server) Balance(ctx context.Context, in *pb.CoinSelection) (*pb.Balances, error) {
+	fmt.Println("(s *server) Balance", in.Coin)
 	ct := coinType(in.Coin)
+	fmt.Println("coinType", ct)
 	wal, err := s.w.WalletForCurrencyCode(ct.CurrencyCode())
 	if err != nil {
+		fmt.Println("Balance error", err)
 		return nil, err
 	}
+	fmt.Println("Balance wallet")
 	c, u := wal.Balance()
-	return &pb.Balances{Confirmed: uint64(c), Unconfirmed: uint64(u)}, nil
+	return &pb.Balances{Confirmed: uint64(c.Value.Int64()), Unconfirmed: uint64(u.Value.Int64())}, nil
 }
 
 func (s *server) MasterPrivateKey(ctx context.Context, in *pb.CoinSelection) (*pb.Key, error) {
+	fmt.Println("(s *server) MasterPrivateKey", in.Coin)
 	// Stub
 	return &pb.Key{Key: ""}, nil
 }
 
 func (s *server) MasterPublicKey(ctx context.Context, in *pb.CoinSelection) (*pb.Key, error) {
+	fmt.Println("(s *server) MasterPublicKey", in.Coin)
 	// Stub
 	return &pb.Key{Key: ""}, nil
 }
 
 func (s *server) Params(ctx context.Context, in *pb.Empty) (*pb.NetParams, error) {
+	fmt.Println("(s *server) Params", in)
 	// Stub
 	return &pb.NetParams{Name: ""}, nil
 }
 
 func (s *server) HasKey(ctx context.Context, in *pb.Address) (*pb.BoolResponse, error) {
+	fmt.Println("(s *server) HasKey", in)
 	// Stub
 	return &pb.BoolResponse{Bool: false}, nil
 }
 
 func (s *server) Transactions(ctx context.Context, in *pb.CoinSelection) (*pb.TransactionList, error) {
+	fmt.Println("(s *server) Transactions", in)
 	// Stub
 	var list []*pb.Tx
 	return &pb.TransactionList{Transactions: list}, nil
 }
 
 func (s *server) GetTransaction(ctx context.Context, in *pb.Txid) (*pb.Tx, error) {
+	fmt.Println("(s *server) GetTransaction", in)
 	// Stub
 	respTx := &pb.Tx{}
 	return respTx, nil
 }
 
 func (s *server) GetFeePerByte(ctx context.Context, in *pb.FeeLevelSelection) (*pb.FeePerByte, error) {
+	fmt.Println("(s *server) GetFeePerByte", in)
 	// Stub
 	return &pb.FeePerByte{Fee: 0}, nil
 }
 
 func (s *server) Spend(ctx context.Context, in *pb.SpendInfo) (*pb.Txid, error) {
+	fmt.Println("(s *server) Spend", in)
 	var addr btcutil.Address
 	var err error
 
@@ -175,7 +194,8 @@ func (s *server) Spend(ctx context.Context, in *pb.SpendInfo) (*pb.Txid, error) 
 	default:
 		feeLevel = wallet.NORMAL
 	}
-	txid, err := wal.Spend(int64(in.Amount), addr, feeLevel, "", false)
+	var amount = *big.NewInt(int64(in.Amount))
+	txid, err := wal.Spend(amount, addr, feeLevel, "", false)
 	if err != nil {
 		return nil, err
 	}
@@ -183,56 +203,67 @@ func (s *server) Spend(ctx context.Context, in *pb.SpendInfo) (*pb.Txid, error) 
 }
 
 func (s *server) BumpFee(ctx context.Context, in *pb.Txid) (*pb.Txid, error) {
+	fmt.Println("(s *server) BumpFee", in)
 	// Stub
 	return &pb.Txid{Coin: in.Coin, Hash: ""}, nil
 }
 
 func (s *server) AddWatchedScript(ctx context.Context, in *pb.Address) (*pb.Empty, error) {
+	fmt.Println("(s *server) AddWatchedScript", in)
 	return nil, nil
 }
 
 func (s *server) GetConfirmations(ctx context.Context, in *pb.Txid) (*pb.Confirmations, error) {
+	fmt.Println("(s *server) GetConfirmations", in)
 	// Stub
 	return &pb.Confirmations{Confirmations: 0}, nil
 }
 
 func (s *server) SweepAddress(ctx context.Context, in *pb.SweepInfo) (*pb.Txid, error) {
+	fmt.Println("(s *server) SweepAddress", in)
 	// Stub
 	return &pb.Txid{Coin: in.Coin, Hash: ""}, nil
 }
 
 func (s *server) CreateMultisigSignature(ctx context.Context, in *pb.CreateMultisigInfo) (*pb.SignatureList, error) {
+	fmt.Println("(s *server) CreateMultisigSignature", in)
 	var retSigs []*pb.Signature
 	return &pb.SignatureList{Sigs: retSigs}, nil
 }
 
 func (s *server) Multisign(ctx context.Context, in *pb.MultisignInfo) (*pb.RawTx, error) {
+	fmt.Println("(s *server) Multisign", in)
 	// Stub
 	return &pb.RawTx{Tx: []byte{}}, nil
 }
 
 func (s *server) EstimateFee(ctx context.Context, in *pb.EstimateFeeData) (*pb.Fee, error) {
+	fmt.Println("(s *server) EstimateFee", in)
 	// Stub
 	return &pb.Fee{Fee: 0}, nil
 }
 
 func (s *server) WalletNotify(in *pb.CoinSelection, stream pb.API_WalletNotifyServer) error {
+	fmt.Println("(s *server) WalletNotify", in)
 	// Stub
 	return nil
 }
 
 func (s *server) GetKey(ctx context.Context, in *pb.Address) (*pb.Key, error) {
+	fmt.Println("(s *server) GetKey", in)
 	// Stub
 	return &pb.Key{Key: ""}, nil
 }
 
 func (s *server) ListAddresses(ctx context.Context, in *pb.CoinSelection) (*pb.Addresses, error) {
 	// Stub
+	fmt.Println("(s *server) ListAddresses", in)
 	var list []*pb.Address
 	return &pb.Addresses{Addresses: list}, nil
 }
 
 func (s *server) ListKeys(ctx context.Context, in *pb.CoinSelection) (*pb.Keys, error) {
+	fmt.Println("(s *server) ListKeys", in)
 	// Stub
 	var list []*pb.Key
 	return &pb.Keys{Keys: list}, nil
@@ -243,6 +274,7 @@ type HeaderWriter struct {
 }
 
 func (h *HeaderWriter) Write(p []byte) (n int, err error) {
+	fmt.Println("(h *HeaderWriter) Write")
 	hdr := &pb.Row{Data: string(p)}
 	if err := h.stream.Send(hdr); err != nil {
 		return 0, err
@@ -251,6 +283,7 @@ func (h *HeaderWriter) Write(p []byte) (n int, err error) {
 }
 
 func (s *server) DumpTables(in *pb.CoinSelection, stream pb.API_DumpTablesServer) error {
+	fmt.Println("(s *server) DumpTables")
 	writer := HeaderWriter{stream}
 	ct := coinType(in.Coin)
 	wal, err := s.w.WalletForCurrencyCode(ct.CurrencyCode())

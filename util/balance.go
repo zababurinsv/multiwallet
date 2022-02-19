@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 
 	wi "github.com/OpenBazaar/wallet-interface"
@@ -9,6 +10,7 @@ import (
 )
 
 func CalcBalance(utxos []wi.Utxo, txns []wi.Txn) (confirmed, unconfirmed int64) {
+	fmt.Println("CalcBalance(utxos []wi.Utxo, txns []wi.Txn)")
 	var txmap = make(map[string]wi.Txn)
 	for _, tx := range txns {
 		txmap[tx.Txid] = tx

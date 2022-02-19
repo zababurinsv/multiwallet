@@ -89,20 +89,23 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 	if coinTypes[wallet.Bitcoin] {
 		var apiEndpoints []string
 		if !testnet {
-			apiEndpoints = []string{
-				"https://btc.api.openbazaar.org/api",
+			apiEndpoints = []string {
+				"https://127.0.0.1:8010",
+				//"https://btc.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://btc.bloqapi.net/insight-api",
 				//"https://btc.insight.openbazaar.org/insight-api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tbtc.api.openbazaar.org/api",
+				"https://127.0.0.1:8010",
+				//"https://tbtc.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://test-insight.bitpay.com/api",
 			}
 		}
-		feeApi := "https://btc.fees.openbazaar.org"
+		//feeApi := "https://btc.fees.openbazaar.org"
+		feeApi := "https://127.0.0.1:8080"
 		db, _ := mockDB.GetDatastoreForWallet(wallet.Bitcoin)
 		btcCfg := CoinConfig{
 			CoinType:    wallet.Bitcoin,
@@ -121,13 +124,15 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://bch.api.openbazaar.org/api",
+				"https://127.0.0.1:8013",
+				//"https://bch.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://bitcoincash.blockexplorer.com/api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tbch.api.openbazaar.org/api",
+				"https://127.0.0.1:8013",
+				//"https://tbch.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://test-bch-insight.bitpay.com/api",
 			}
@@ -150,13 +155,23 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://zec.api.openbazaar.org/api",
+				"http://127.0.0.1:8232",
+				//"http://127.0.0.1:8232",
+				//"http://127.0.0.1:8761",
+				//"http://127.0.0.1:9473",
+				//"http://127.0.0.1:2456",
+				//"http://127.0.0.1:9050",
+
+				//"https://127.0.0.1:8012",
+				//"https://zec.api.openbazaar.org",
 				// temporarily deprecated Insight endpoints
 				//"https://zcashnetwork.info/api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tzec.api.openbazaar.org/api",
+				//"https://127.0.0.1:801666",
+				//"https://127.0.0.1:8232",
+				//"https://tzec.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://explorer.testnet.z.cash/api",
 			}
@@ -179,14 +194,16 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://ltc.api.openbazaar.org/api",
+				"https://127.0.0.1:8011",
+				//"https://ltc.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://ltc.coin.space/api",
 				//"https://ltc.insight.openbazaar.org/insight-lite-api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tltc.api.openbazaar.org/api",
+				"https://127.0.0.1:8011",
+				//"https://tltc.api.openbazaar.org/api",
 				// temporarily deprecated Insight endpoints
 				//"https://testnet.litecore.io/api",
 			}
